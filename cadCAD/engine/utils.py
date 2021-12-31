@@ -1,5 +1,4 @@
 from datetime import datetime
-from fn.func import curried
 
 
 def datetime_range(start, end, delta, dt_format='%Y-%m-%d %H:%M:%S'):
@@ -24,15 +23,10 @@ def retrieve_state(l, offset):
     return l[last_index(l) + offset + 1]
 
 
-@curried
+# @curried
 def engine_exception(ErrorType, error_message, exception_function, try_function):
     try:
         return try_function
     except ErrorType:
         print(error_message)
         return exception_function
-
-
-@curried
-def fit_param(param, x):
-    return x + param
