@@ -1,10 +1,10 @@
-import pandas as pd
-import numpy as np
+import pandas as pd # type: ignore
 from datetime import datetime, timedelta
 from collections import Counter
-from copy import deepcopy
 from functools import reduce
-from funcy import curry
+from funcy import curry # type: ignore
+from cadCAD.types import *
+from typing import Union, Dict, List
 
 from cadCAD.configuration.utils.depreciationHandler import sanitize_partial_state_updates
 from cadCAD.utils import dict_filter, contains_type, flatten_tabulated_dict, tabulate_dict
@@ -104,7 +104,7 @@ def exo_update_per_ts(ep):
         else:
             return y, s[y]
 
-    return {es: ep_decorator(f, es) for es, f in ep.items()}
+    return {es: ep_decorator(f, es) for es, f in ep.items()} # type: ignore
 
 
 def trigger_condition(s, pre_conditions, cond_opp):
@@ -143,7 +143,7 @@ def var_substep_trigger(substeps):
 def env_trigger(end_substep):
     def trigger(end_substep, trigger_field, trigger_vals, funct_list):
         def env_update(state_dict, sweep_dict, target_value):
-            state_dict_copy = deepcopy(state_dict)
+            state_dict_copy = state_dict.copy()
             # Use supstep to simulate current sysMetrics
             if state_dict_copy['substep'] == end_substep:
                 state_dict_copy['timestep'] = state_dict_copy['timestep'] + 1
@@ -161,27 +161,41 @@ def env_trigger(end_substep):
         curry(trigger)(end_substep)(trigger_field)(trigger_vals)(funct_list)
 
 
-def config_sim(d):
-    def process_variables(d):
-        return flatten_tabulated_dict(tabulate_dict(d))
+def config_sim(config_dict: ConfigurationDict):
 
-    if "N" in d:
-        if d["N"] <= 0:
+    if "N" in config_dict:
+        if config_dict["N"] <= 0:
             raise ValueError("'N' must be > 0")
+        else:
+            pass
     else:
-        raise KeyError("The 'sim_configs' dictionary must contain the key 'N'")
+        raise KeyError("The 'sim_configs' dictionary must contain the key 'N' (# of Monte Carlo Runs)")
 
-    if "T" not in d:
-        raise KeyError("The 'sim_configs' dictionary must contain the key 'T'")
-
-    if "M" in d:
-        M_lengths = len(list(set({key: len(value) for key, value in d["M"].items()}.values())))
-        if M_lengths > 2:
-            raise Exception('`M` values require up to a maximum of 2 distinct lengths')
-        return [{"N": d["N"], "T": d["T"], "M": M} for M in process_variables(d["M"])]
+    if "T" not in config_dict:
+        raise KeyError("The 'sim_configs' dictionary must contain the key 'T' (Timestep Iterator)")
     else:
-        d["M"] = [{}]
-        return d
+        if "M" in config_dict:
+            params = config_dict['M']
+
+            param_values_length = {key: len(value) if type(value) == list else 0 
+                                for key, value in params.items()}
+            param_values_length_set = set(param_values_length.values())
+            distinct_param_value_lengths = len(param_values_length_set)
+
+            if distinct_param_value_lengths > 2:
+                raise Exception('When sweeping, `M` list lengths should either be 1 and/or equal. More than two distinct lengths are not allowed')
+            elif (distinct_param_value_lengths == 1) and (0 in param_values_length_set):
+                return config_dict
+            elif (distinct_param_value_lengths == 1) or (1 in param_values_length_set):
+                return [{**config_dict, "M": M} 
+
+                        for M in flatten_tabulated_dict(tabulate_dict(params))]
+            else:
+                raise Exception('When sweeping, `M` list lengths should either be 1 and/or equal. ')
+
+        else:
+            config_dict["M"] = [{}]
+            return config_dict
 
 
 def psub_list(psu_block, psu_steps):
@@ -245,8 +259,8 @@ def sweep_partial_states(_type, in_config):
         for partial_state, state_dict in filtered_partial_states.items():
             for state, state_funcs in state_dict.items():
                 for f in state_funcs:
-                    config = deepcopy(in_config)
-                    config.partial_state_update_blocks[partial_state][_type][state] = f
+                    config = in_config.copy()
+                    config.partial_state_updates[partial_state][_type][state] = f
                     configs.append(config)
                     del config
     else:
@@ -261,8 +275,8 @@ def sweep_states(state_type, states, in_config):
     if len(filtered_states) > 0:
         for state, state_funcs in filtered_states.items():
             for f in state_funcs:
-                config = deepcopy(in_config)
-                exploded_states = deepcopy(states)
+                config = in_config.copy()
+                exploded_states = states.copy()
                 exploded_states[state] = f
                 if state_type == 'exogenous':
                     config.exogenous_states = exploded_states
